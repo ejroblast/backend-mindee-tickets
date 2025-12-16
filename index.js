@@ -51,8 +51,8 @@ app.post("/images", upload.single("Imagen"), async (req, res) => {
     fs.renameSync(req.file.path, rutaCompleta);  // Sync para evitar problemas
 
     // Procesar con Mindee
-    //const inputSource = mindeeClient.docFromPath(rutaCompleta);
-    const inputSource = mindee.document(mindee.product.custom.CustomV1, rutaCompleta);
+    const inputSource = mindeeClient.docFromPath(rutaCompleta);
+    //const inputSource = mindee.document(mindee.product.custom.CustomV1, rutaCompleta);
 
     const inferenceParams = {
       modelId: MINDEE_MODEL_ID,
