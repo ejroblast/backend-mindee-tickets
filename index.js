@@ -52,7 +52,7 @@ app.post("/images", upload.single("Imagen"), async (req, res) => {
 
     // Procesar con Mindee
     //const inputSource = mindeeClient.docFromPath(rutaCompleta);
-    const inputSource = new mindee.input.PathInput({ inputPath: rutaCompleta });
+    const inputSource = new mindee.PathInput({ inputPath: rutaCompleta });
 
     const inferenceParams = {
       modelId: MINDEE_MODEL_ID,
