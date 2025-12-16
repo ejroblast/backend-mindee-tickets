@@ -61,7 +61,7 @@ app.post("/images", upload.single("Imagen"), async (req, res) => {
     };
 
     const apiResponse = await mindeeClient.enqueueAndGetInference(inputSource, inferenceParams);
-
+    console.log(apiResponse.inference.toString());
     // Borrar archivo temporal
     fs.unlinkSync(rutaCompleta);
 
