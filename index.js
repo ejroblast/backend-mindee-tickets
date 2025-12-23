@@ -2,23 +2,34 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const mindee = require("mindee");
 const cors = require("cors");  // <-- AÑADIDO
+const OpenAI = require("openai");
+const cloudinary = require("cloudinary").v2;
+require('dotenv').config();
 
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+
 // AÑADIDO: Habilitar CORS para que el frontend pueda conectar
 app.use(cors());
 
-// Variables de entorno
-const MINDEE_API_KEY = process.env.MINDEE_API_KEY;
-const MINDEE_MODEL_ID = process.env.MINDEE_MODEL_ID;
+//Configuración cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
+});
 
-if (!MINDEE_API_KEY || !MINDEE_MODEL_ID) {
-  console.error("Faltan MINDEE_API_KEY o MINDEE_MODEL_ID");
-  process.exit(1);
-}
+// Variables de entorno
+const OPEN_ROUTER_API_KEY = process.env.OPEN_ROUTER_API_KEY;
+const OPEN_ROUTER_MODEL_ID = process.env.OPEN_ROUTER_MODEL_ID;
+
+//Nuevo cliente
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: OPEN_ROUTER_API_KEY,
+});
 
 // Crear carpeta uploads
 const uploadsDir = "uploads";
@@ -28,8 +39,33 @@ if (!fs.existsSync(uploadsDir)) {
 
 const upload = multer({ dest: uploadsDir });
 
-// Cliente Mindee (se crea una sola vez)
-const mindeeClient = new mindee.ClientV2({ apiKey: MINDEE_API_KEY });
+//Función Llamar al modelo correspondiente:
+
+async function call_model(prompt,imageUrl) {
+  const completion = await openai.chat.completions.create({
+    model: OPEN_ROUTER_MODEL_ID,
+    messages: [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": prompt,
+
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": imageUrl
+            }
+          }
+        ]
+      }
+    ]
+  });
+
+  console.log(completion.choices[0].message);
+}
 
 // Ruta principal: subir + procesar con Mindee
 app.post("/images", upload.single("Imagen"), async (req, res) => {
@@ -40,7 +76,16 @@ app.post("/images", upload.single("Imagen"), async (req, res) => {
       return res.status(400).json({ success: false, message: "No se recibió imagen" });
     }
 
-    // Añadir extensión correcta
+    // Obtener el texto enviado desde Flutter
+    const textoUsuario = req.body.texto || "";
+    console.log("Texto recibido:", textoUsuario);
+    const prompt = "Eres un asistente de moda experto. Te voy a enviar una foto de un outfit." + "La ocasión:" + textoUsuario + "Tu tarea es:" +
+      "1. Analizar el outfit en la imagen basandote en el estilo, combinación de colores y adecuación a la ocasión.." + "2. Darle una puntuación del 1 al 10" +
+      "3. Proporcionar 3 recomendaciones claras para mejorar el outfit" +
+      "4. Responder en formato JSON con tres campos: \"score\" (número del 1 al 10), \"Opinion personal\"(Ademas da alguna recomendación en tono personal) y \"recomendaciones\" (lista de 3 frases)." +
+      "Recuerda ser conciso y directo. No agregues explicaciones adicionales fuera del JSON.";
+
+    // Añadir extensión correcta para la foto
     let ext = ".jpg";
     if (req.file.mimetype === "image/png") ext = ".png";
     else if (req.file.mimetype === "image/jpeg") ext = ".jpg";
@@ -50,30 +95,23 @@ app.post("/images", upload.single("Imagen"), async (req, res) => {
     rutaCompleta = path.join(uploadsDir, nuevoNombre);
     fs.renameSync(req.file.path, rutaCompleta);  // Sync para evitar problemas
 
-    // Procesar con Mindee
-    //const inputSource = mindeeClient.docFromPath(rutaCompleta);
-    const inputSource = new mindee.PathInput({ inputPath: rutaCompleta });
+    //Subir imagen y conseguir URL
+    const result = await cloudinary.uploader.upload(rutaCompleta);
+    const imageUrl = result.secure_url; // esta es la URL pública
 
-    const inferenceParams = {
-      modelId: MINDEE_MODEL_ID,
-      rawText: true,
-      polygon: true,
-      confidence: true,
-    };
-
-    const apiResponse = await mindeeClient.enqueueAndGetInference(inputSource, inferenceParams);
-    console.log(apiResponse.inference.toString());
     // Borrar archivo temporal
     fs.unlinkSync(rutaCompleta);
 
+    //Enviar outfit al modelo
+    await call_model(prompt,imageUrl);
     // Enviar resultado al frontend
     res.json({
       success: true,
-      message: "Imagen procesada con éxito",
+      message: "Imagen y texto Recibidos con éxito",
       data: {
-        summary: apiResponse.inference.toString(),
-        fields: apiResponse.inference.result.fields,  // Aquí tienes todos los campos extraídos
-        // Puedes extraer campos específicos aquí, ej: total: fields.get("total")?.value
+        texto: textoUsuario,
+        filename: nuevoNombre
+
       }
     });
 

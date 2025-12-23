@@ -7,10 +7,13 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.19.2",
     "mindee": "^4.34.0",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "openai": "^6.15.0"
   },
   "keywords": [],
   "author": "",
